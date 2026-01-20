@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  auroscope-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auroscope_report_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    networks:
+      - auroscope-network
+
+networks:
+  auroscope-network:
+    driver: bridge
