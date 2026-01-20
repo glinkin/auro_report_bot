@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::info;
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use crate::config::Config;
 use crate::csv_generator::CsvGenerator;
@@ -10,12 +10,23 @@ use crate::nocodb::NocoDBClient;
 use crate::pdf_generator::PdfGenerator;
 
 #[derive(Debug, Clone)]
+pub struct ClubStats {
+    pub club_id: String,
+    pub club_name: String,
+    pub total_generations: usize,
+    pub unique_clients: usize,
+    pub percentage: f64,
+}
+
+#[derive(Debug, Clone)]
 pub struct ReportStats {
     pub total_records: usize,
     pub unique_clients: usize,
     pub low_aura: usize,      // < 60
     pub normal_aura: usize,   // 60-80
     pub high_aura: usize,     // > 80
+    pub club_stats: Vec<ClubStats>,
+    pub avg_generation_time: f64,  // Average time in seconds
 }
 
 pub struct ReportService {
@@ -55,7 +66,7 @@ impl ReportService {
         }
 
         // Calculate statistics
-        let stats = self.calculate_stats(&data);
+        let stats = self.calculate_stats(&data, &club_names);
 
         // Generate CSV with club names
         let csv_filename = format!("{}/report_{}.csv", output_dir, self.get_filename_suffix(&date_range));
@@ -125,24 +136,35 @@ impl ReportService {
     }
 
     /// Calculate statistics from report data
-    pub fn calculate_stats(&self, data: &[Value]) -> ReportStats {
+    pub fn calculate_stats(&self, data: &[Value], club_names: &HashMap<String, String>) -> ReportStats {
         let mut unique_phones = HashSet::new();
         let mut low_aura = 0;
         let mut normal_aura = 0;
         let mut high_aura = 0;
+        
+        // Statistics by club
+        let mut club_generations: HashMap<String, usize> = HashMap::new();
+        let mut club_unique_phones: HashMap<String, HashSet<String>> = HashMap::new();
+        
+        // Generation time tracking
+        let mut total_generation_time = 0.0;
+        let mut generation_time_count = 0;
 
         for record in data {
             if let Some(obj) = record.as_object() {
                 // Count unique clients by phone
-                if let Some(phone) = obj.get("phone") {
-                    let phone_str = match phone {
+                let phone_str = if let Some(phone) = obj.get("phone") {
+                    match phone {
                         Value::Number(n) => n.to_string(),
                         Value::String(s) => s.clone(),
                         _ => String::new(),
-                    };
-                    if !phone_str.is_empty() {
-                        unique_phones.insert(phone_str);
                     }
+                } else {
+                    String::new()
+                };
+                
+                if !phone_str.is_empty() {
+                    unique_phones.insert(phone_str.clone());
                 }
 
                 // Parse aura percent from text_aura field
@@ -155,15 +177,83 @@ impl ReportService {
                         high_aura += 1;
                     }
                 }
+                
+                // Count by club_id
+                if let Some(club_id) = obj.get("club_id").and_then(|v| v.as_str()) {
+                    *club_generations.entry(club_id.to_string()).or_insert(0) += 1;
+                    
+                    if !phone_str.is_empty() {
+                        club_unique_phones
+                            .entry(club_id.to_string())
+                            .or_insert_with(HashSet::new)
+                            .insert(phone_str.clone());
+                    }
+                }
+                
+                // Calculate generation time (difference between UpdatedAt and CreatedAt)
+                if let (Some(created), Some(updated)) = (
+                    obj.get("CreatedAt").or_else(|| obj.get("CreatedAt1")).and_then(|v| v.as_str()),
+                    obj.get("UpdatedAt").or_else(|| obj.get("UpdatedAt1")).and_then(|v| v.as_str())
+                ) {
+                    if let (Ok(created_time), Ok(updated_time)) = (
+                        chrono::DateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S%z")
+                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset())),
+                        chrono::DateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S%z")
+                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset()))
+                    ) {
+                        let duration = updated_time.signed_duration_since(created_time);
+                        total_generation_time += duration.num_milliseconds() as f64 / 1000.0;
+                        generation_time_count += 1;
+                    }
+                }
             }
         }
 
+        // Calculate club statistics
+        let total_records = data.len();
+        let mut club_stats: Vec<ClubStats> = club_generations
+            .iter()
+            .map(|(club_id, &generations)| {
+                let unique_clients = club_unique_phones
+                    .get(club_id)
+                    .map(|phones| phones.len())
+                    .unwrap_or(0);
+                
+                let percentage = if total_records > 0 {
+                    (generations as f64 / total_records as f64) * 100.0
+                } else {
+                    0.0
+                };
+                
+                ClubStats {
+                    club_id: club_id.clone(),
+                    club_name: club_names.get(club_id).cloned().unwrap_or_else(|| club_id.clone()),
+                    total_generations: generations,
+                    unique_clients,
+                    percentage,
+                }
+            })
+            .collect();
+        
+        // Sort by total_generations descending
+        club_stats.sort_by(|a, b| b.total_generations.cmp(&a.total_generations));
+        
+        let avg_generation_time = if generation_time_count > 0 {
+            total_generation_time / generation_time_count as f64
+        } else {
+            0.0
+        };
+
         ReportStats {
-            total_records: data.len(),
+            total_records,
             unique_clients: unique_phones.len(),
             low_aura,
             normal_aura,
             high_aura,
+            club_stats,
+            avg_generation_time,
         }
     }
 

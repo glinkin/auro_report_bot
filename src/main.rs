@@ -176,19 +176,43 @@ async fn generate_and_send_report(
 
     match report_service.generate_report(period, "reports").await {
         Ok((csv_path, pdf_path, stats)) => {
+            // Build club statistics section
+            let mut club_stats_text = String::new();
+            if !stats.club_stats.is_empty() {
+                club_stats_text.push_str("\n\n📍 *Статистика по комплексам:*\n");
+                for club_stat in &stats.club_stats {
+                    club_stats_text.push_str(&format!(
+                        "\n🏢 _{}_\n   Генераций: *{}* ({:.1}%)\n   Клиентов: *{}*",
+                        club_stat.club_name,
+                        club_stat.total_generations,
+                        club_stat.percentage,
+                        club_stat.unique_clients
+                    ));
+                }
+            }
+            
+            // Build generation time section
+            let generation_time_text = if stats.avg_generation_time > 0.0 {
+                format!("\n\n⏱ *Среднее время генерации:* {:.1} сек", stats.avg_generation_time)
+            } else {
+                String::new()
+            };
+            
             // Send statistics message
             let stats_message = format!(
                 "📊 *Статистика по отчету*\n\n\
                 📈 Всего генераций: *{}*\n\
-                👥 Клиентов: *{}*\n\n\
+                👥 Уникальных клиентов: *{}*\n\n\
                 🔴 Низкая аура (<60%): *{}*\n\
                 🟡 Нормальная аура (60-80%): *{}*\n\
-                🟢 Высокая аура (>80%): *{}*",
+                🟢 Высокая аура (>80%): *{}*{}{}",
                 stats.total_records,
                 stats.unique_clients,
                 stats.low_aura,
                 stats.normal_aura,
-                stats.high_aura
+                stats.high_aura,
+                club_stats_text,
+                generation_time_text
             );
             
             bot.send_message(chat_id, stats_message)
