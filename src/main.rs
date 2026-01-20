@@ -163,6 +163,27 @@ async fn handle_command(
     Ok(())
 }
 
+fn escape_markdown(text: &str) -> String {
+    text.replace('_', "\\_")
+        .replace('*', "\\*")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('~', "\\~")
+        .replace('`', "\\`")
+        .replace('>', "\\>")
+        .replace('#', "\\#")
+        .replace('+', "\\+")
+        .replace('-', "\\-")
+        .replace('=', "\\=")
+        .replace('|', "\\|")
+        .replace('{', "\\{")
+        .replace('}', "\\}")
+        .replace('.', "\\.")
+        .replace('!', "\\!")
+}
+
 async fn generate_and_send_report(
     bot: Bot,
     chat_id: ChatId,
@@ -181,9 +202,10 @@ async fn generate_and_send_report(
             if !stats.club_stats.is_empty() {
                 club_stats_text.push_str("\n\n📍 *Статистика по комплексам:*\n");
                 for club_stat in &stats.club_stats {
+                    let escaped_name = escape_markdown(&club_stat.club_name);
                     club_stats_text.push_str(&format!(
                         "\n🏢 _{}_\n   Генераций: *{}* ({:.1}%)\n   Клиентов: *{}*",
-                        club_stat.club_name,
+                        escaped_name,
                         club_stat.total_generations,
                         club_stat.percentage,
                         club_stat.unique_clients
