@@ -31,6 +31,7 @@ pub struct ReportStats {
 
 pub struct ReportService {
     nocodb_client: NocoDBClient,
+    date_field_name: String,
 }
 
 impl ReportService {
@@ -42,7 +43,10 @@ impl ReportService {
             config.nocodb_clubs_table_id.clone(),
         );
 
-        Self { nocodb_client }
+        Self { 
+            nocodb_client,
+            date_field_name: config.date_field_name.clone(),
+        }
     }
 
     /// Generate full report (CSV + PDF) for a given period
@@ -117,8 +121,8 @@ impl ReportService {
         let end_str = date_range.end.format("%Y-%m-%d %H:%M").to_string();
         
         let filter = format!(
-            "(CreatedAt1,ge,exactDate,{})~and(CreatedAt1,le,exactDate,{})",
-            start_str, end_str
+            "({},ge,exactDate,{})~and({},le,exactDate,{})",
+            self.date_field_name, start_str, self.date_field_name, end_str
         );
         
         info!("Using filter: {}", filter);
@@ -129,8 +133,36 @@ impl ReportService {
                 Ok(records)
             },
             Err(e) => {
-                info!("Server-side filtering failed ({}), fetching all records", e);
-                self.nocodb_client.fetch_records().await
+                info!("Server-side filtering failed ({}), fetching all records and filtering client-side", e);
+                let all_records = self.nocodb_client.fetch_records().await?;
+                
+                // Client-side filtering by date
+                let filtered_records: Vec<Value> = all_records
+                    .into_iter()
+                    .filter(|record| {
+                        if let Some(obj) = record.as_object() {
+                            // Use configured date field name
+                            let created_at = obj.get(&self.date_field_name)
+                                .and_then(|v| v.as_str());
+                            
+                            if let Some(date_str) = created_at {
+                                // Try to parse the date
+                                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S") {
+                                    let date = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc);
+                                    return date >= date_range.start && date <= date_range.end;
+                                } else if let Ok(dt) = chrono::DateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S%z") {
+                                    return dt.with_timezone(&chrono::Utc) >= date_range.start && 
+                                           dt.with_timezone(&chrono::Utc) <= date_range.end;
+                                }
+                            }
+                        }
+                        false
+                    })
+                    .collect();
+                
+                info!("Filtered {} records from {} total for period: {}", 
+                    filtered_records.len(), all_records.len(), date_range.label);
+                Ok(filtered_records)
             }
         }
     }

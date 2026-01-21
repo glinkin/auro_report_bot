@@ -11,6 +11,7 @@ pub struct Config {
     pub nocodb_clubs_table_id: String,
     pub allowed_user_ids: Vec<i64>,
     pub report_schedule_time: String, // Format: "HH:MM"
+    pub date_field_name: String, // Field name for date filtering (e.g., "CreatedAt", "CreatedAt1")
 }
 
 #[derive(Error, Debug)]
@@ -33,6 +34,9 @@ impl Config {
 
         let report_schedule_time = env::var("REPORT_SCHEDULE_TIME")
             .unwrap_or_else(|_| "09:00".to_string());
+        
+        let date_field_name = env::var("DATE_FIELD_NAME")
+            .unwrap_or_else(|_| "CreatedAt1".to_string());
 
         Ok(Config {
             telegram_token: env::var("TELEGRAM_BOT_TOKEN")
@@ -47,6 +51,7 @@ impl Config {
                 .map_err(|_| ConfigError::MissingEnvVar("NOCODB_CLUBS_TABLE_ID".to_string()))?,
             allowed_user_ids,
             report_schedule_time,
+            date_field_name,
         })
     }
 }
