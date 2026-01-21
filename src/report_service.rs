@@ -152,6 +152,15 @@ impl ReportService {
 
         for record in data {
             if let Some(obj) = record.as_object() {
+                // Check if club_id exists and is in club_names table
+                let club_id_opt = obj.get("club_id").and_then(|v| v.as_str());
+                let has_valid_club = club_id_opt.map(|id| club_names.contains_key(id)).unwrap_or(false);
+                
+                // Skip records without valid club_id
+                if !has_valid_club {
+                    continue;
+                }
+                
                 // Count unique clients by phone
                 let phone_str = if let Some(phone) = obj.get("phone") {
                     match phone {
@@ -179,7 +188,7 @@ impl ReportService {
                 }
                 
                 // Count by club_id
-                if let Some(club_id) = obj.get("club_id").and_then(|v| v.as_str()) {
+                if let Some(club_id) = club_id_opt {
                     *club_generations.entry(club_id.to_string()).or_insert(0) += 1;
                     
                     if !phone_str.is_empty() {
@@ -211,10 +220,11 @@ impl ReportService {
             }
         }
 
-        // Calculate club statistics
-        let total_records = data.len();
+        // Calculate club statistics - only for clubs that exist in club_names
+        let total_records: usize = club_generations.values().sum();
         let mut club_stats: Vec<ClubStats> = club_generations
             .iter()
+            .filter(|(club_id, _)| club_names.contains_key(*club_id))
             .map(|(club_id, &generations)| {
                 let unique_clients = club_unique_phones
                     .get(club_id)
