@@ -163,27 +163,6 @@ async fn handle_command(
     Ok(())
 }
 
-fn escape_markdown(text: &str) -> String {
-    text.replace('_', "\\_")
-        .replace('*', "\\*")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
-        .replace('(', "\\(")
-        .replace(')', "\\)")
-        .replace('~', "\\~")
-        .replace('`', "\\`")
-        .replace('>', "\\>")
-        .replace('#', "\\#")
-        .replace('+', "\\+")
-        .replace('-', "\\-")
-        .replace('=', "\\=")
-        .replace('|', "\\|")
-        .replace('{', "\\{")
-        .replace('}', "\\}")
-        .replace('.', "\\.")
-        .replace('!', "\\!")
-}
-
 async fn generate_and_send_report(
     bot: Bot,
     chat_id: ChatId,
@@ -200,11 +179,14 @@ async fn generate_and_send_report(
             // Build club statistics section
             let mut club_stats_text = String::new();
             if !stats.club_stats.is_empty() {
-                club_stats_text.push_str("\n\n📍 *Статистика по комплексам:*\n");
+                club_stats_text.push_str("\n\n📍 <b>Статистика по комплексам:</b>\n");
                 for club_stat in &stats.club_stats {
-                    let escaped_name = escape_markdown(&club_stat.club_name);
+                    let escaped_name = club_stat.club_name
+                        .replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;");
                     club_stats_text.push_str(&format!(
-                        "\n🏢 _{}_\n   Генераций: *{}* ({:.1}%)\n   Клиентов: *{}*",
+                        "\n🏢 <i>{}</i>\n   Генераций: <b>{}</b> ({:.1}%)\n   Клиентов: <b>{}</b>",
                         escaped_name,
                         club_stat.total_generations,
                         club_stat.percentage,
@@ -215,19 +197,19 @@ async fn generate_and_send_report(
             
             // Build generation time section
             let generation_time_text = if stats.avg_generation_time > 0.0 {
-                format!("\n\n⏱ *Среднее время генерации:* {:.1} сек", stats.avg_generation_time)
+                format!("\n\n⏱ <b>Среднее время генерации:</b> {:.1} сек", stats.avg_generation_time)
             } else {
                 String::new()
             };
             
             // Send statistics message
             let stats_message = format!(
-                "📊 *Статистика по отчету*\n\n\
-                📈 Всего генераций: *{}*\n\
-                👥 Уникальных клиентов: *{}*\n\n\
-                🔴 Низкая аура (<60%): *{}*\n\
-                🟡 Нормальная аура (60-80%): *{}*\n\
-                🟢 Высокая аура (>80%): *{}*{}{}",
+                "📊 <b>Статистика по отчету</b>\n\n\
+                📈 Всего генераций: <b>{}</b>\n\
+                👥 Уникальных клиентов: <b>{}</b>\n\n\
+                🔴 Низкая аура (&lt;60%): <b>{}</b>\n\
+                🟡 Нормальная аура (60-80%): <b>{}</b>\n\
+                🟢 Высокая аура (&gt;80%): <b>{}</b>{}{}",
                 stats.total_records,
                 stats.unique_clients,
                 stats.low_aura,
@@ -238,7 +220,7 @@ async fn generate_and_send_report(
             );
             
             bot.send_message(chat_id, stats_message)
-                .parse_mode(teloxide::types::ParseMode::Markdown)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
 
             bot.send_message(chat_id, "✅ Отчет готов! Отправляю файлы...")
