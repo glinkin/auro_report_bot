@@ -72,23 +72,51 @@ impl Scheduler {
         for user_id in &self.config.allowed_user_ids {
             let chat_id = ChatId(*user_id);
             
+            // Build club statistics section
+            let mut club_stats_text = String::new();
+            if !stats.club_stats.is_empty() {
+                club_stats_text.push_str("\n\n📍 <b>Статистика по комплексам:</b>\n");
+                for club_stat in &stats.club_stats {
+                    let escaped_name = club_stat.club_name
+                        .replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;");
+                    club_stats_text.push_str(&format!(
+                        "\n🏢 <i>{}</i>\n   Генераций: <b>{}</b> ({:.1}%)\n   Клиентов: <b>{}</b>",
+                        escaped_name,
+                        club_stat.total_generations,
+                        club_stat.percentage,
+                        club_stat.unique_clients
+                    ));
+                }
+            }
+            
+            // Build generation time section
+            let generation_time_text = if stats.avg_generation_time > 0.0 {
+                format!("\n\n⏱ <b>Среднее время генерации:</b> {:.1} сек", stats.avg_generation_time)
+            } else {
+                String::new()
+            };
+            
             // Send statistics
             let stats_message = format!(
-                "📊 *Ежедневный отчет*\n\n\
-                📈 Всего генераций: *{}*\n\
-                👥 Клиентов: *{}*\n\n\
-                🔴 Низкая аура (<60%%): *{}*\n\
-                🟡 Нормальная аура (60-80%%): *{}*\n\
-                🟢 Высокая аура (>80%%): *{}*",
+                "📊 <b>Ежедневный отчет</b>\n\n\
+                📈 Всего генераций: <b>{}</b>\n\
+                👥 Уникальных клиентов: <b>{}</b>\n\n\
+                🔴 Низкая аура (&lt;60%): <b>{}</b>\n\
+                🟡 Нормальная аура (60-80%): <b>{}</b>\n\
+                🟢 Высокая аура (&gt;80%): <b>{}</b>{}{}",
                 stats.total_records,
                 stats.unique_clients,
                 stats.low_aura,
                 stats.normal_aura,
-                stats.high_aura
+                stats.high_aura,
+                club_stats_text,
+                generation_time_text
             );
             
             if let Err(e) = self.bot.send_message(chat_id, stats_message)
-                .parse_mode(teloxide::types::ParseMode::Markdown)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await {
                 error!("Failed to send stats to user {}: {}", user_id, e);
             }
