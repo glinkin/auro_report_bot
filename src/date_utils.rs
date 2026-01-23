@@ -57,8 +57,9 @@ impl Period {
                 }
             }
             Period::Week => {
-                let start_of_week = now_msk - Duration::days(now_msk.weekday().num_days_from_monday() as i64);
-                let start = start_of_week
+                // Последние 7 дней
+                let start_date = now_msk - Duration::days(6);
+                let start = start_date
                     .date_naive()
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
@@ -70,16 +71,16 @@ impl Period {
                 DateRange {
                     start: Moscow.from_local_datetime(&start).unwrap().with_timezone(&Utc),
                     end: Moscow.from_local_datetime(&end).unwrap().with_timezone(&Utc),
-                    label: format!("Текущая неделя ({} - {})", 
-                        start_of_week.format("%d.%m.%Y"),
+                    label: format!("Последние 7 дней ({} - {})", 
+                        start_date.format("%d.%m.%Y"),
                         now_msk.format("%d.%m.%Y")),
                 }
             }
             Period::Month => {
-                let start_of_month = now_msk
+                // Последние 30 дней
+                let start_date = now_msk - Duration::days(29);
+                let start = start_date
                     .date_naive()
-                    .with_day(1)
-                    .unwrap()
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
                 let end = now_msk
@@ -88,20 +89,18 @@ impl Period {
                     .unwrap();
                 
                 DateRange {
-                    start: Moscow.from_local_datetime(&start_of_month).unwrap().with_timezone(&Utc),
+                    start: Moscow.from_local_datetime(&start).unwrap().with_timezone(&Utc),
                     end: Moscow.from_local_datetime(&end).unwrap().with_timezone(&Utc),
-                    label: format!("Текущий месяц ({})", now_msk.format("%B %Y")),
+                    label: format!("Последние 30 дней ({} - {})", 
+                        start_date.format("%d.%m.%Y"),
+                        now_msk.format("%d.%m.%Y")),
                 }
             }
             Period::Quarter => {
-                let current_month = now_msk.month();
-                let quarter_start_month = ((current_month - 1) / 3) * 3 + 1;
-                let start_of_quarter = now_msk
+                // Последние 90 дней
+                let start_date = now_msk - Duration::days(89);
+                let start = start_date
                     .date_naive()
-                    .with_day(1)
-                    .unwrap()
-                    .with_month(quarter_start_month)
-                    .unwrap()
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
                 let end = now_msk
@@ -109,22 +108,19 @@ impl Period {
                     .and_hms_opt(23, 59, 59)
                     .unwrap();
                 
-                let quarter_num = (quarter_start_month - 1) / 3 + 1;
                 DateRange {
-                    start: Moscow.from_local_datetime(&start_of_quarter).unwrap().with_timezone(&Utc),
+                    start: Moscow.from_local_datetime(&start).unwrap().with_timezone(&Utc),
                     end: Moscow.from_local_datetime(&end).unwrap().with_timezone(&Utc),
-                    label: format!("Q{} {}", quarter_num, now_msk.format("%Y")),
+                    label: format!("Последние 90 дней ({} - {})", 
+                        start_date.format("%d.%m.%Y"),
+                        now_msk.format("%d.%m.%Y")),
                 }
             }
             Period::HalfYear => {
-                let current_month = now_msk.month();
-                let half_start_month = if current_month <= 6 { 1 } else { 7 };
-                let start_of_half = now_msk
+                // Последние 180 дней
+                let start_date = now_msk - Duration::days(179);
+                let start = start_date
                     .date_naive()
-                    .with_day(1)
-                    .unwrap()
-                    .with_month(half_start_month)
-                    .unwrap()
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
                 let end = now_msk
@@ -132,20 +128,19 @@ impl Period {
                     .and_hms_opt(23, 59, 59)
                     .unwrap();
                 
-                let half_num = if half_start_month == 1 { 1 } else { 2 };
                 DateRange {
-                    start: Moscow.from_local_datetime(&start_of_half).unwrap().with_timezone(&Utc),
+                    start: Moscow.from_local_datetime(&start).unwrap().with_timezone(&Utc),
                     end: Moscow.from_local_datetime(&end).unwrap().with_timezone(&Utc),
-                    label: format!("Полугодие {} ({})", half_num, now_msk.format("%Y")),
+                    label: format!("Последние 180 дней ({} - {})", 
+                        start_date.format("%d.%m.%Y"),
+                        now_msk.format("%d.%m.%Y")),
                 }
             }
             Period::Year => {
-                let start_of_year = now_msk
+                // Последние 365 дней
+                let start_date = now_msk - Duration::days(364);
+                let start = start_date
                     .date_naive()
-                    .with_day(1)
-                    .unwrap()
-                    .with_month(1)
-                    .unwrap()
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
                 let end = now_msk
@@ -154,9 +149,11 @@ impl Period {
                     .unwrap();
                 
                 DateRange {
-                    start: Moscow.from_local_datetime(&start_of_year).unwrap().with_timezone(&Utc),
+                    start: Moscow.from_local_datetime(&start).unwrap().with_timezone(&Utc),
                     end: Moscow.from_local_datetime(&end).unwrap().with_timezone(&Utc),
-                    label: format!("Текущий год ({})", now_msk.format("%Y")),
+                    label: format!("Последние 365 дней ({} - {})", 
+                        start_date.format("%d.%m.%Y"),
+                        now_msk.format("%d.%m.%Y")),
                 }
             }
         }
