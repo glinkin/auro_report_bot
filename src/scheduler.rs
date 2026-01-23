@@ -93,10 +93,19 @@ impl Scheduler {
             
             // Build generation time section
             let generation_time_text = if stats.avg_generation_time > 0.0 {
-                format!("\n\n⏱ <b>Среднее время генерации:</b> {:.1} сек", stats.avg_generation_time)
+                format!("\n\n⏱ <b>Среднее время генерации (done):</b> {:.1} сек", stats.avg_generation_time)
             } else {
                 String::new()
             };
+            
+            // Build status statistics section
+            let status_text = format!(
+                "\n\n📋 <b>Статусы генераций:</b>\n   ✅ Done: <b>{}</b> ({:.1}%)\n   ⏳ Process: <b>{}</b> ({:.1}%)",
+                stats.done_count,
+                stats.done_percentage,
+                stats.process_count,
+                stats.process_percentage
+            );
             
             // Send statistics
             let stats_message = format!(
@@ -105,14 +114,15 @@ impl Scheduler {
                 👥 Уникальных клиентов: <b>{}</b>\n\n\
                 🔴 Низкая аура (&lt;60%): <b>{}</b>\n\
                 🟡 Нормальная аура (60-80%): <b>{}</b>\n\
-                🟢 Высокая аура (&gt;80%): <b>{}</b>{}{}",
+                🟢 Высокая аура (&gt;80%): <b>{}</b>{}{}{}",
                 stats.total_records,
                 stats.unique_clients,
                 stats.low_aura,
                 stats.normal_aura,
                 stats.high_aura,
                 club_stats_text,
-                generation_time_text
+                generation_time_text,
+                status_text
             );
             
             if let Err(e) = self.bot.send_message(chat_id, stats_message)

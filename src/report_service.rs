@@ -26,7 +26,11 @@ pub struct ReportStats {
     pub normal_aura: usize,   // 60-80
     pub high_aura: usize,     // > 80
     pub club_stats: Vec<ClubStats>,
-    pub avg_generation_time: f64,  // Average time in seconds
+    pub avg_generation_time: f64,  // Average time in seconds (only for done status)
+    pub done_count: usize,    // Count of records with status "done"
+    pub process_count: usize, // Count of records with status "process"
+    pub done_percentage: f64, // Percentage of done records
+    pub process_percentage: f64, // Percentage of process records
 }
 
 pub struct ReportService {
@@ -179,28 +183,44 @@ impl ReportService {
         let mut club_generations: HashMap<String, usize> = HashMap::new();
         let mut club_unique_phones: HashMap<String, HashSet<String>> = HashMap::new();
         
-        // Generation time tracking
+        // Generation time tracking (only for done status)
         let mut total_generation_time = 0.0;
         let mut generation_time_count = 0;
+        
+        // Status tracking
+        let mut done_count = 0;
+        let mut process_count = 0;
 
         for record in data {
             if let Some(obj) = record.as_object() {
-                // Calculate generation time for ALL records (before filtering)
-                if let (Some(created), Some(updated)) = (
-                    obj.get("CreatedAt").or_else(|| obj.get("CreatedAt1")).and_then(|v| v.as_str()),
-                    obj.get("UpdatedAt").or_else(|| obj.get("UpdatedAt1")).and_then(|v| v.as_str())
-                ) {
-                    if let (Ok(created_time), Ok(updated_time)) = (
-                        chrono::DateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S%z")
-                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S")
-                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset())),
-                        chrono::DateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S%z")
-                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S")
-                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset()))
+                // Get status
+                let status = obj.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                
+                // Count statuses
+                if status == "done" {
+                    done_count += 1;
+                } else if status == "process" {
+                    process_count += 1;
+                }
+                
+                // Calculate generation time ONLY for done status
+                if status == "done" {
+                    if let (Some(created), Some(updated)) = (
+                        obj.get("CreatedAt").or_else(|| obj.get("CreatedAt1")).and_then(|v| v.as_str()),
+                        obj.get("UpdatedAt").or_else(|| obj.get("UpdatedAt1")).and_then(|v| v.as_str())
                     ) {
-                        let duration = updated_time.signed_duration_since(created_time);
-                        total_generation_time += duration.num_milliseconds() as f64 / 1000.0;
-                        generation_time_count += 1;
+                        if let (Ok(created_time), Ok(updated_time)) = (
+                            chrono::DateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S%z")
+                                .or_else(|_| chrono::NaiveDateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S")
+                                    .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset())),
+                            chrono::DateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S%z")
+                                .or_else(|_| chrono::NaiveDateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S")
+                                    .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset()))
+                        ) {
+                            let duration = updated_time.signed_duration_since(created_time);
+                            total_generation_time += duration.num_milliseconds() as f64 / 1000.0;
+                            generation_time_count += 1;
+                        }
                     }
                 }
                 
@@ -288,6 +308,19 @@ impl ReportService {
         } else {
             0.0
         };
+        
+        // Calculate percentages for statuses
+        let total_with_status = done_count + process_count;
+        let done_percentage = if total_with_status > 0 {
+            (done_count as f64 / total_with_status as f64) * 100.0
+        } else {
+            0.0
+        };
+        let process_percentage = if total_with_status > 0 {
+            (process_count as f64 / total_with_status as f64) * 100.0
+        } else {
+            0.0
+        };
 
         ReportStats {
             total_records,
@@ -297,6 +330,10 @@ impl ReportService {
             high_aura,
             club_stats,
             avg_generation_time,
+            done_count,
+            process_count,
+            done_percentage,
+            process_percentage,
         }
     }
 
