@@ -185,6 +185,25 @@ impl ReportService {
 
         for record in data {
             if let Some(obj) = record.as_object() {
+                // Calculate generation time for ALL records (before filtering)
+                if let (Some(created), Some(updated)) = (
+                    obj.get("CreatedAt").or_else(|| obj.get("CreatedAt1")).and_then(|v| v.as_str()),
+                    obj.get("UpdatedAt").or_else(|| obj.get("UpdatedAt1")).and_then(|v| v.as_str())
+                ) {
+                    if let (Ok(created_time), Ok(updated_time)) = (
+                        chrono::DateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S%z")
+                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset())),
+                        chrono::DateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S%z")
+                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S")
+                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset()))
+                    ) {
+                        let duration = updated_time.signed_duration_since(created_time);
+                        total_generation_time += duration.num_milliseconds() as f64 / 1000.0;
+                        generation_time_count += 1;
+                    }
+                }
+                
                 // Check if club_id exists and is in club_names table
                 let club_id_opt = obj.get("club_id").and_then(|v| v.as_str());
                 let has_valid_club = club_id_opt.map(|id| club_names.contains_key(id)).unwrap_or(false);
@@ -229,25 +248,6 @@ impl ReportService {
                             .entry(club_id.to_string())
                             .or_insert_with(HashSet::new)
                             .insert(phone_str.clone());
-                    }
-                }
-                
-                // Calculate generation time (difference between UpdatedAt and CreatedAt)
-                if let (Some(created), Some(updated)) = (
-                    obj.get("CreatedAt").or_else(|| obj.get("CreatedAt1")).and_then(|v| v.as_str()),
-                    obj.get("UpdatedAt").or_else(|| obj.get("UpdatedAt1")).and_then(|v| v.as_str())
-                ) {
-                    if let (Ok(created_time), Ok(updated_time)) = (
-                        chrono::DateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S%z")
-                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(created, "%Y-%m-%d %H:%M:%S")
-                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset())),
-                        chrono::DateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S%z")
-                            .or_else(|_| chrono::NaiveDateTime::parse_from_str(updated, "%Y-%m-%d %H:%M:%S")
-                                .map(|dt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(dt, chrono::Utc).fixed_offset()))
-                    ) {
-                        let duration = updated_time.signed_duration_since(created_time);
-                        total_generation_time += duration.num_milliseconds() as f64 / 1000.0;
-                        generation_time_count += 1;
                     }
                 }
             }
