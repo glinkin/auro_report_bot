@@ -135,6 +135,7 @@ impl ReportService {
             Err(e) => {
                 info!("Server-side filtering failed ({}), fetching all records and filtering client-side", e);
                 let all_records = self.nocodb_client.fetch_records().await?;
+                let total_count = all_records.len();
                 
                 // Client-side filtering by date
                 let filtered_records: Vec<Value> = all_records
@@ -161,7 +162,7 @@ impl ReportService {
                     .collect();
                 
                 info!("Filtered {} records from {} total for period: {}", 
-                    filtered_records.len(), all_records.len(), date_range.label);
+                    filtered_records.len(), total_count, date_range.label);
                 Ok(filtered_records)
             }
         }
